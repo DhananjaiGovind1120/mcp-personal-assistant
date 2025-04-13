@@ -1,6 +1,5 @@
 from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
-from starlette.routing import Mount
 from mcp.server.sse import SseServerTransport
 from tools import mcp
 
@@ -10,14 +9,16 @@ app = FastAPI(
     version="0.1.0",
 )
 
-# ✅ Mount the static webapp (frontend)
+# ✅ Mount the static frontend directory
 app.mount("/webapp", StaticFiles(directory="webapp"), name="webapp")
 
-# Set up SSE server for AI assistant message handling
+# ✅ Set up SSE server transport
 sse = SseServerTransport("/messages/")
-app.router.routes.append(Mount("/messages", app=sse.handle_post_message))
 
+# ✅ Register POST handler for tool calls
+app.router.routes.append(sse.as_route())  # ← this is the key fix
 
+# ✅ Handle GET /sse to connect the EventStream
 @app.get("/sse")
 async def sse_handler(request: Request):
     async with sse.connect_sse(request.scope, request.receive, request._send) as (
