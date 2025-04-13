@@ -41,55 +41,55 @@
   <pre id="responseBox">Waiting for response...</pre>
 
   <script>
-    async function sendToMCP() {
-      const tool = document.getElementById("toolSelect").value;
-      const input = document.getElementById("inputBox").value;
-      const responseBox = document.getElementById("responseBox");
+  async function sendToMCP() {
+    const tool = document.getElementById("toolSelect").value;
+    const input = document.getElementById("inputBox").value;
+    const responseBox = document.getElementById("responseBox");
 
-      const sessionId = "session-" + Date.now();
-      responseBox.innerText = "Waiting for response...";
+    const sessionId = "session-" + Date.now();
+    responseBox.innerText = "Waiting for response...";
 
-      // Step 1: Connect to the SSE stream
-      const eventSource = new EventSource(`/sse?session_id=${sessionId}`);
-      eventSource.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        if (data?.type === "toolResult") {
-          responseBox.innerText = data.result;
+    // 1. Connect to SSE stream
+    const eventSource = new EventSource(`/sse?session_id=${sessionId}`);
+    eventSource.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      if (data?.type === "toolResult") {
+        responseBox.innerText = data.result;
+        eventSource.close();
+      }
+    };
+
+    // 2. Prepare payload
+    const payload = {
+      type: "callTool",
+      tool_name: tool,
+      arguments: {
+        task: input,
+        text: input
+      }
+    };
+
+    console.log("Sending payload to MCP:", payload);
+
+    // 3. POST to /messages/ with session_id in the query string
+    setTimeout(() => {
+      fetch(`/messages/?session_id=${sessionId}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(payload)
+      }).then((res) => {
+        if (!res.ok) {
+          responseBox.innerText = `❌ Error: ${res.status}`;
           eventSource.close();
         }
-      };
-
-      // Step 2: Send the request AFTER SSE is connected
-      setTimeout(() => {
-        const payload = {
-          session_id: sessionId,
-          type: "callTool",
-          tool_name: tool,
-          arguments: {
-            task: input,
-            text: input
-          }
-        };
-
-        console.log("Sending payload to MCP:", payload);
-
-        fetch("/messages/", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify(payload)
-        }).then((res) => {
-          if (!res.ok) {
-            responseBox.innerText = `❌ Failed to send: ${res.status}`;
-            eventSource.close();
-          }
-        }).catch((err) => {
-          responseBox.innerText = `❌ Error: ${err}`;
-          eventSource.close();
-        });
-      }, 200); // short delay to ensure stream is open
-    }
-  </script>
+      }).catch((err) => {
+        responseBox.innerText = `❌ Error: ${err}`;
+        eventSource.close();
+      });
+    }, 200); // Wait briefly for SSE to connect
+  }
+</script>
 </body>
 </html>
