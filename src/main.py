@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Request
-from mcp.server.sse import SseServerTransport
+from fastapi.staticfiles import StaticFiles
 from starlette.routing import Mount
+from mcp.server.sse import SseServerTransport
 from tools import mcp
 
 app = FastAPI(
@@ -9,7 +10,10 @@ app = FastAPI(
     version="0.1.0",
 )
 
-# Set up SSE server
+# ✅ Mount the static webapp (frontend)
+app.mount("/webapp", StaticFiles(directory="webapp"), name="webapp")
+
+# Set up SSE server for AI assistant message handling
 sse = SseServerTransport("/messages/")
 app.router.routes.append(Mount("/messages", app=sse.handle_post_message))
 
