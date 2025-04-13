@@ -3,65 +3,93 @@
 <head>
   <meta charset="UTF-8" />
   <title>AI Assistant (MCP)</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 2rem;
+    }
+    textarea {
+      width: 400px;
+    }
+    pre {
+      background: #f2f2f2;
+      padding: 1rem;
+      border: 1px solid #ccc;
+      max-width: 500px;
+      white-space: pre-wrap;
+    }
+  </style>
 </head>
 <body>
   <h1>AI Assistant</h1>
+
+  <label for="toolSelect">Choose a tool:</label>
   <select id="toolSelect">
     <option value="add_task">Add Task</option>
     <option value="list_tasks">List Tasks</option>
     <option value="summarize_text">Summarize Text</option>
   </select>
+
   <br><br>
-  <textarea id="inputBox" rows="4" cols="50" placeholder="Type your message..."></textarea>
-  <br>
+
+  <textarea id="inputBox" rows="4" placeholder="Type your message or task..."></textarea>
+
+  <br><br>
   <button onclick="sendToMCP()">Send</button>
-  <pre id="responseBox"></pre>
+
+  <h3>Response:</h3>
+  <pre id="responseBox">Waiting for response...</pre>
 
   <script>
-  function sendToMCP() {
-    const tool = document.getElementById("toolSelect").value;
-    const input = document.getElementById("inputBox").value;
-    const responseBox = document.getElementById("responseBox");
+    async function sendToMCP() {
+      const tool = document.getElementById("toolSelect").value;
+      const input = document.getElementById("inputBox").value;
+      const responseBox = document.getElementById("responseBox");
 
-    const sessionId = "session-" + Date.now();
+      const sessionId = "session-" + Date.now();
+      responseBox.innerText = "Waiting for response...";
 
-    // Connect to the server using SSE
-    const eventSource = new EventSource(`/sse?session_id=${sessionId}`);
-    eventSource.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      if (data?.type === "toolResult") {
-        responseBox.innerText = data.result;
-        eventSource.close();
-      }
-    };
+      // Step 1: Connect to the SSE stream
+      const eventSource = new EventSource(`/sse?session_id=${sessionId}`);
+      eventSource.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        if (data?.type === "toolResult") {
+          responseBox.innerText = data.result;
+          eventSource.close();
+        }
+      };
 
-    // Correct POST body
-    const payload = {
-      session_id: sessionId,
-      type: "callTool",
-      tool_name: tool,
-      arguments: {
-        task: input,
-        text: input
-      }
-    };
+      // Step 2: Send the request AFTER SSE is connected
+      setTimeout(() => {
+        const payload = {
+          session_id: sessionId,
+          type: "callTool",
+          tool_name: tool,
+          arguments: {
+            task: input,
+            text: input
+          }
+        };
 
-    fetch("/messages/", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify(payload)
-    }).then((res) => {
-      if (!res.ok) {
-        responseBox.innerText = `❌ Error: ${res.status}`;
-        eventSource.close();
-      }
-    }).catch((err) => {
-      responseBox.innerText = `❌ Failed: ${err}`;
-      eventSource.close();
-    });
-  }
-</script>
+        console.log("Sending payload to MCP:", payload);
+
+        fetch("/messages/", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify(payload)
+        }).then((res) => {
+          if (!res.ok) {
+            responseBox.innerText = `❌ Failed to send: ${res.status}`;
+            eventSource.close();
+          }
+        }).catch((err) => {
+          responseBox.innerText = `❌ Error: ${err}`;
+          eventSource.close();
+        });
+      }, 200); // short delay to ensure stream is open
+    }
+  </script>
 </body>
 </html>
