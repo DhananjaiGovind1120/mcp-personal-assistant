@@ -25,8 +25,11 @@
     const responseBox = document.getElementById("responseBox");
     responseBox.innerText = "Waiting for response...";
 
-    // 1. Start listening for response
-    const eventSource = new EventSource("/sse");
+    // Generate a session ID (use static or random)
+    const sessionId = "session-" + Date.now();
+
+    // 1. Start listening to the server with session ID
+    const eventSource = new EventSource(`/sse?session_id=${sessionId}`);
     eventSource.onmessage = (event) => {
       const data = JSON.parse(event.data);
       if (data?.type === "toolResult") {
@@ -35,11 +38,12 @@
       }
     };
 
-    // 2. Post the message to MCP
+    // 2. Post the message to MCP with session ID
     await fetch("/messages/", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        session_id: sessionId,
         type: "callTool",
         toolName: tool,
         arguments: {
