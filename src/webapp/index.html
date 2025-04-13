@@ -21,46 +21,52 @@
     async function sendToMCP() {
       const tool = document.getElementById("toolSelect").value;
       const input = document.getElementById("inputBox").value;
+      const responseBox = document.getElementById("responseBox");
   
-      const args = {};
-      if (tool === "add_task") {
-        args.task = input;
-      } else if (tool === "summarize_text") {
-        args.text = input;
-      }
+      const sessionId = "session-" + Date.now();
+      responseBox.innerText = "Waiting for response...";
   
-      const eventSource = new EventSource("/sse");
-  
-      eventSource.onopen = () => {
-        console.log("SSE connection opened.");
-  
-        const message = {
-          type: "callTool",
-          toolName: tool,
-          arguments: args
-        };
-  
-        // Send the tool call once SSE opens
-        eventSource.dispatchEvent(new MessageEvent("message", {
-          data: JSON.stringify(message)
-        }));
-      };
-  
+      // 1. Connect to SSE stream
+      const eventSource = new EventSource(`/sse?session_id=${sessionId}`);
       eventSource.onmessage = (event) => {
         const data = JSON.parse(event.data);
-        console.log("Received SSE response:", data);
-  
         if (data?.type === "toolResult") {
-          document.getElementById("responseBox").innerText = data.result;
+          responseBox.innerText = data.result;
           eventSource.close();
         }
       };
   
-      eventSource.onerror = (error) => {
-        console.error("SSE error:", error);
-        eventSource.close();
+      // 2. Prepare payload
+      const payload = {
+        type: "callTool",
+        tool_name: tool,
+        arguments: {
+          task: input,
+          text: input
+        }
       };
+  
+      console.log("Sending payload to MCP:", payload);
+  
+      // 3. POST to /messages/ with session_id in the query string
+      setTimeout(() => {
+        fetch(`/messages/?session_id=${sessionId}`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify(payload)
+        }).then((res) => {
+          if (!res.ok) {
+            responseBox.innerText = `❌ Error: ${res.status}`;
+            eventSource.close();
+          }
+        }).catch((err) => {
+          responseBox.innerText = `❌ Error: ${err}`;
+          eventSource.close();
+        });
+      }, 200); // Wait briefly for SSE to connect
     }
-  </script>  
+  </script>    
 </body>
 </html>
