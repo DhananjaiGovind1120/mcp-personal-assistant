@@ -23,8 +23,6 @@
       const input = document.getElementById("inputBox").value;
   
       const args = {};
-  
-      // Only send what each tool expects
       if (tool === "add_task") {
         args.task = input;
       } else if (tool === "summarize_text") {
@@ -34,23 +32,35 @@
       const eventSource = new EventSource("/sse");
   
       eventSource.onopen = () => {
+        console.log("SSE connection opened.");
+  
+        const message = {
+          type: "callTool",
+          toolName: tool,
+          arguments: args
+        };
+  
+        // Send the tool call once SSE opens
         eventSource.dispatchEvent(new MessageEvent("message", {
-          data: JSON.stringify({
-            type: "callTool",
-            toolName: tool,
-            arguments: args
-          })
+          data: JSON.stringify(message)
         }));
       };
   
       eventSource.onmessage = (event) => {
         const data = JSON.parse(event.data);
+        console.log("Received SSE response:", data);
+  
         if (data?.type === "toolResult") {
           document.getElementById("responseBox").innerText = data.result;
           eventSource.close();
         }
       };
+  
+      eventSource.onerror = (error) => {
+        console.error("SSE error:", error);
+        eventSource.close();
+      };
     }
-  </script>
+  </script>  
 </body>
 </html>
