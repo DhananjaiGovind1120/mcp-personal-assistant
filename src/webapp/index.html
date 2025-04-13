@@ -24,19 +24,8 @@
       const responseBox = document.getElementById("responseBox");
   
       const sessionId = "session-" + Date.now();
-      responseBox.innerText = "Waiting for response...";
+      responseBox.innerText = "⏳ Connecting...";
   
-      // 1. Connect to SSE stream
-      const eventSource = new EventSource(`/sse?session_id=${sessionId}`);
-      eventSource.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        if (data?.type === "toolResult") {
-          responseBox.innerText = data.result;
-          eventSource.close();
-        }
-      };
-  
-      // 2. Prepare payload
       const payload = {
         type: "callTool",
         tool_name: tool,
@@ -46,27 +35,47 @@
         }
       };
   
-      console.log("Sending payload to MCP:", payload);
+      console.log("Payload:", payload);
   
-      // 3. POST to /messages/ with session_id in the query string
-      setTimeout(() => {
-        fetch(`/messages/?session_id=${sessionId}`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify(payload)
-        }).then((res) => {
-          if (!res.ok) {
-            responseBox.innerText = `❌ Error: ${res.status}`;
-            eventSource.close();
-          }
-        }).catch((err) => {
-          responseBox.innerText = `❌ Error: ${err}`;
+      // Step 1: Set up SSE first
+      const eventSource = new EventSource(`/sse?session_id=${sessionId}`);
+  
+      eventSource.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        if (data?.type === "toolResult") {
+          responseBox.innerText = `✅ ${data.result}`;
           eventSource.close();
-        });
-      }, 200); // Wait briefly for SSE to connect
+        }
+      };
+  
+      eventSource.onerror = () => {
+        responseBox.innerText = "❌ SSE connection error.";
+        eventSource.close();
+      };
+  
+      // Step 2: Send POST shortly after opening SSE stream
+      // Wait for the connection to stabilize
+      eventSource.onopen = () => {
+        responseBox.innerText = "📤 Sending tool call...";
+        setTimeout(() => {
+          fetch(`/messages/?session_id=${sessionId}`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify(payload)
+          }).then((res) => {
+            if (!res.ok) {
+              responseBox.innerText = `❌ Error: ${res.status}`;
+              eventSource.close();
+            }
+          }).catch((err) => {
+            responseBox.innerText = `❌ Error: ${err}`;
+            eventSource.close();
+          });
+        }, 200); // Wait 200ms after onopen
+      };
     }
-  </script>    
+  </script>      
 </body>
 </html>
