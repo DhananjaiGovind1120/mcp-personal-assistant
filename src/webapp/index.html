@@ -22,44 +22,32 @@
     const tool = document.getElementById("toolSelect").value;
     const input = document.getElementById("inputBox").value;
 
-    const args = {};
-    if (tool === "add_task") {
-      args.task = input;
-    } else if (tool === "summarize_text") {
-      args.text = input;
-    }
+    const responseBox = document.getElementById("responseBox");
+    responseBox.innerText = "Waiting for response...";
 
+    // 1. Start listening for response
     const eventSource = new EventSource("/sse");
-
-    eventSource.onopen = () => {
-      console.log("SSE connection opened.");
-
-      const message = {
-        type: "callTool",
-        toolName: tool,
-        arguments: args
-      };
-
-      // Send the tool call once SSE opens
-      eventSource.dispatchEvent(new MessageEvent("message", {
-        data: JSON.stringify(message)
-      }));
-    };
-
     eventSource.onmessage = (event) => {
       const data = JSON.parse(event.data);
-      console.log("Received SSE response:", data);
-
       if (data?.type === "toolResult") {
-        document.getElementById("responseBox").innerText = data.result;
+        responseBox.innerText = data.result;
         eventSource.close();
       }
     };
 
-    eventSource.onerror = (error) => {
-      console.error("SSE error:", error);
-      eventSource.close();
-    };
+    // 2. Post the message to MCP
+    await fetch("/messages/", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        type: "callTool",
+        toolName: tool,
+        arguments: {
+          task: input,
+          text: input,
+        }
+      })
+    });
   }
 </script>
 </body>
