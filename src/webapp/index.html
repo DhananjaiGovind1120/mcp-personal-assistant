@@ -47,7 +47,7 @@
     const responseBox = document.getElementById("responseBox");
 
     const sessionId = "session-" + Date.now();
-    responseBox.innerText = "⏳ Connecting...";
+    responseBox.innerText = "⏳ Connecting to MCP...";
 
     const payload = {
       type: "callTool",
@@ -58,29 +58,22 @@
       }
     };
 
+    console.log("Generated sessionId:", sessionId);
     console.log("Payload:", payload);
 
-    // Step 1: Set up SSE first
+    // 1. Connect to SSE stream and wait for MCP to "ping" (proof session is registered)
+    let sessionReady = false;
+
     const eventSource = new EventSource(`/sse?session_id=${sessionId}`);
 
     eventSource.onmessage = (event) => {
       const data = JSON.parse(event.data);
-      if (data?.type === "toolResult") {
-        responseBox.innerText = `✅ ${data.result}`;
-        eventSource.close();
-      }
-    };
 
-    eventSource.onerror = () => {
-      responseBox.innerText = "❌ SSE connection error.";
-      eventSource.close();
-    };
+      if (!sessionReady) {
+        console.log("✅ SSE stream confirmed. MCP is ready.");
+        sessionReady = true;
 
-    // Step 2: Send POST shortly after opening SSE stream
-    // Wait for the connection to stabilize
-    eventSource.onopen = () => {
-      responseBox.innerText = "📤 Sending tool call...";
-      setTimeout(() => {
+        // Now send the tool call
         fetch(`/messages/?session_id=${sessionId}`, {
           method: "POST",
           headers: {
@@ -96,7 +89,20 @@
           responseBox.innerText = `❌ Error: ${err}`;
           eventSource.close();
         });
-      }, 200); // Wait 200ms after onopen
+
+        return;
+      }
+
+      // If it's an actual response from the tool
+      if (data?.type === "toolResult") {
+        responseBox.innerText = `✅ ${data.result}`;
+        eventSource.close();
+      }
+    };
+
+    eventSource.onerror = () => {
+      responseBox.innerText = "❌ SSE connection error.";
+      eventSource.close();
     };
   }
 </script>
